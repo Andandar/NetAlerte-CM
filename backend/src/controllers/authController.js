@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const knex = require('../../knexfile');
+const knexConfig = require('../../knexfile');
+const environment = process.env.NODE_ENV || 'development';
+const knex = require('knex')(knexConfig[environment]);
 const logger = require('../utils/logger');
 
 exports.login = async (req, res) => {

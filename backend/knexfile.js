@@ -23,6 +23,28 @@ module.exports = {
     }
   },
 
+  test: { // Add test environment configuration
+    client: 'postgresql',
+    connection: {
+      host: process.env.DB_HOST_TEST || 'localhost',
+      database: process.env.DB_NAME_TEST || 'netalerte_cm_test',
+      user: process.env.DB_USER_TEST || 'postgres',
+      password: process.env.DB_PASSWORD_TEST || 'postgres',
+      port: process.env.DB_PORT_TEST || 5432
+    },
+    pool: {
+      min: 2,
+      max: 10
+    },
+    migrations: {
+      tableName: 'knex_migrations',
+      directory: './migrations'
+    },
+    seeds: {
+      directory: './seeds'
+    }
+  },
+
   production: {
     client: 'postgresql',
     connection: {
