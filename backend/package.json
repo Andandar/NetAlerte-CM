@@ -1,7 +1,7 @@
 {
   "name": "netalerte-cm-backend",
   "version": "1.0.0",
-  "description": "Backend API pour NetAlerte CM",
+  "description": "Backend pour l'application NetAlerte CM",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -12,26 +12,28 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
     "express": "^4.18.2",
     "pg": "^8.11.3",
     "knex": "^2.5.1",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "winston": "^3.11.0",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
+    "dotenv": "^16.0.3",
+    "winston": "^3.8.2",
+    "helmet": "^6.0.1",
+    "express-rate-limit": "^6.7.0",
     "swagger-ui-express": "^5.0.0",
     "yamljs": "^0.3.0",
     "express-validator": "^7.0.1",
-    "joi": "^17.11.0"
+    "joi": "^17.11.0",
+    "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "jest": "^29.7.0",
+    "nodemon": "^2.0.22",
+    "jest": "^29.5.0",
     "supertest": "^6.3.3",
-    "eslint": "^8.56.0",
+    "eslint": "^8.40.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.29.1"
   }
