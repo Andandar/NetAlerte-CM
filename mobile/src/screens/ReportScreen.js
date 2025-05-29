@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,16 +15,19 @@ import {
   TextInput,
   IconButton,
   useTheme,
+  SegmentedButtons,
 } from 'react-native-paper';
 import NetInfo from '@react-native-community/netinfo';
 import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios';
+import api from '../config/api';
 
 const PROBLEM_TYPES = [
+  'Pas de réseau',
+  'Réseau lent',
   'Appels impossibles',
-  'SMS non reçus/envoyés',
-  'Internet lent ou coupé',
-  'Coupures réseau',
+  'Internet lent',
+  'Autre',
 ];
 const OPERATORS = ['Orange', 'MTN', 'Nexttel', 'Camtel', 'Autre'];
 const NETWORK_TECH = ['2G', '3G', '4G', '5G'];
@@ -33,154 +36,158 @@ const ReportScreen = ({ navigation }) => {
   const theme = useTheme();
   const [problemType, setProblemType] = useState('');
   const [operator, setOperator] = useState('');
-  const [networkTech, setNetworkTech] = useState('4G');
-  const [signalStrength, setSignalStrength] = useState(3); // 0 à 4
+  const [networkType, setNetworkType] = useState('');
+  const [signalStrength, setSignalStrength] = useState('');
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const requestLocation = async () => {
-    if (Platform.OS === 'ios') {
-      Geolocation.requestAuthorization();
-      Geolocation.getCurrentPosition(
-        pos => setLocation(pos.coords),
-        err => Alert.alert('Erreur', 'Impossible d'obtenir la position'),
-        { enableHighAccuracy: true }
-      );
-      return;
-    }
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-      );
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-        Geolocation.getCurrentPosition(
-          pos => setLocation(pos.coords),
-          err => Alert.alert('Erreur', 'Impossible d'obtenir la position'),
-          { enableHighAccuracy: true }
-        );
-      }
-    } catch (e) {
-      Alert.alert('Erreur', 'Permission refusée');
-    }
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = () => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        setLocation(position.coords);
+      },
+      (error) => {
+        console.log('Erreur de géolocalisation:', error);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
+    );
   };
 
-  const handleSend = async () => {
-    if (!problemType || !operator) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
-      return;
-    }
-    setLoading(true);
+  const handleSubmit = async () => {
     try {
-      const net = await NetInfo.fetch();
-      const data = {
-        problem_type: problemType,
+      if (!operator || !problemType) {
+        setError('Veuillez sélectionner un opérateur et un type de problème');
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      const reportData = {
         operator,
-        network_type: networkTech,
-        signal_strength: signalStrength * 25, // 0 à 100
+        problem_type: problemType,
+        signal_strength: signalStrength,
+        network_type: networkType,
         latitude: location?.latitude,
         longitude: location?.longitude,
       };
-      await axios.post('http://localhost:3000/api/reports', data);
-      navigation.replace('ThankYou');
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible d'envoyer le signalement');
+
+      await api.post('/reports', reportData);
+      navigation.goBack();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de l\'envoi du signalement');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Signaler un problème</Text>
-      <Text style={styles.label}>Type de problème</Text>
-      <RadioButton.Group onValueChange={setProblemType} value={problemType}>
-        {PROBLEM_TYPES.map(type => (
-          <RadioButton.Item key={type} label={type} value={type} />
-        ))}
-      </RadioButton.Group>
-      <Text style={styles.label}>Opérateur</Text>
-      <RadioButton.Group onValueChange={setOperator} value={operator}>
-        {OPERATORS.map(op => (
-          <RadioButton.Item key={op} label={op} value={op} />
-        ))}
-      </RadioButton.Group>
-      <Text style={styles.label}>Technologie réseau</Text>
-      <RadioButton.Group onValueChange={setNetworkTech} value={networkTech}>
-        {NETWORK_TECH.map(tech => (
-          <RadioButton.Item key={tech} label={tech} value={tech} />
-        ))}
-      </RadioButton.Group>
-      <Text style={styles.label}>Force du signal</Text>
-      <View style={styles.signalRow}>
-        {[0, 1, 2, 3, 4].map(i => {
-          const iconNames = [
-            'signal-cellular-0-bar',
-            'signal-cellular-1-bar',
-            'signal-cellular-2-bar',
-            'signal-cellular-3-bar',
-            'signal-cellular-4-bar',
-          ];
-          return (
-            <IconButton
-              key={i}
-              icon={iconNames[i]}
-              color={i <= signalStrength ? theme.colors.primary : '#ccc'}
-              size={32}
-              onPress={() => setSignalStrength(i)}
-            />
-          );
-        })}
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Nouveau signalement</Text>
+
+        <Text style={styles.label}>Opérateur</Text>
+        <SegmentedButtons
+          value={operator}
+          onValueChange={setOperator}
+          buttons={OPERATORS.map((op) => ({
+            value: op,
+            label: op,
+          }))}
+          style={styles.segmentedButtons}
+        />
+
+        <Text style={styles.label}>Type de problème</Text>
+        <SegmentedButtons
+          value={problemType}
+          onValueChange={setProblemType}
+          buttons={PROBLEM_TYPES.map((type) => ({
+            value: type,
+            label: type,
+          }))}
+          style={styles.segmentedButtons}
+        />
+
+        <TextInput
+          label="Force du signal (0-100)"
+          value={signalStrength}
+          onChangeText={setSignalStrength}
+          mode="outlined"
+          style={styles.input}
+          keyboardType="numeric"
+        />
+
+        <TextInput
+          label="Type de réseau (2G, 3G, 4G, 5G)"
+          value={networkType}
+          onChangeText={setNetworkType}
+          mode="outlined"
+          style={styles.input}
+        />
+
+        <Text style={styles.label}>Localisation (optionnelle)</Text>
+        <Button
+          mode={location ? 'contained' : 'outlined'}
+          icon="map-marker"
+          onPress={getCurrentLocation}
+          style={{ marginBottom: 16 }}
+        >
+          {location ? 'Position enregistrée' : 'Utiliser ma position actuelle'}
+        </Button>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Button
+          mode="contained"
+          onPress={handleSubmit}
+          loading={loading}
+          style={styles.button}
+        >
+          Envoyer le signalement
+        </Button>
       </View>
-      <Text style={styles.label}>Localisation (optionnelle)</Text>
-      <Button
-        mode={location ? 'contained' : 'outlined'}
-        icon="map-marker"
-        onPress={requestLocation}
-        style={{ marginBottom: 16 }}
-      >
-        {location ? 'Position enregistrée' : 'Utiliser ma position actuelle'}
-      </Button>
-      <Button
-        mode="contained"
-        onPress={handleSend}
-        loading={loading}
-        disabled={loading}
-        style={styles.sendButton}
-      >
-        Envoyer
-      </Button>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
+    flex: 1,
     backgroundColor: '#fff',
-    flexGrow: 1,
+  },
+  content: {
+    padding: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#2563eb',
-    textAlign: 'center',
+    marginBottom: 20,
+    color: '#2196F3',
   },
   label: {
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 4,
-    color: '#222',
+    fontSize: 16,
+    marginBottom: 10,
+    color: '#666',
   },
-  signalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+  segmentedButtons: {
+    marginBottom: 20,
   },
-  sendButton: {
-    marginTop: 24,
-    borderRadius: 24,
-    paddingVertical: 6,
+  input: {
+    marginBottom: 15,
+  },
+  button: {
+    marginTop: 10,
+    padding: 5,
+  },
+  error: {
+    color: '#B00020',
+    textAlign: 'center',
+    marginBottom: 10,
   },
 });
 

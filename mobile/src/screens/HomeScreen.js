@@ -6,6 +6,7 @@ import {
   Platform,
   PermissionsAndroid,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import {
   Button,
@@ -18,11 +19,13 @@ import {
   List,
   Portal,
   Modal,
+  FAB,
 } from 'react-native-paper';
 import NetInfo from '@react-native-community/netinfo';
 import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../config/api';
 
 const OPERATORS = ['Orange', 'MTN', 'Nexttel', 'Camtel', 'Autre'];
 const PROBLEM_TYPES = [
@@ -32,7 +35,7 @@ const PROBLEM_TYPES = [
   'Coupure réseau',
 ];
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [networkInfo, setNetworkInfo] = useState(null);
   const [location, setLocation] = useState(null);
@@ -41,10 +44,15 @@ const HomeScreen = () => {
   const [selectedProblemType, setSelectedProblemType] = useState('');
   const [showOperatorModal, setShowOperatorModal] = useState(false);
   const [showProblemTypeModal, setShowProblemTypeModal] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [recentReports, setRecentReports] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     checkNetworkInfo();
     loadOfflineReports();
+    fetchData();
   }, []);
 
   const checkNetworkInfo = async () => {
@@ -167,6 +175,27 @@ const HomeScreen = () => {
     }
   };
 
+  const fetchData = async () => {
+    try {
+      const [statsResponse, reportsResponse] = await Promise.all([
+        api.get('/reports/stats'),
+        api.get('/reports/recent'),
+      ]);
+
+      setStats(statsResponse.data.data);
+      setRecentReports(reportsResponse.data.data);
+      setError('');
+    } catch (err) {
+      setError('Erreur lors du chargement des données');
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
   const renderOperatorModal = () => (
     <Portal>
       <Modal
@@ -225,70 +254,124 @@ const HomeScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>NetAlerte CM</Title>
-          <Paragraph>
-            Signalez rapidement les problèmes de réseau mobile au Cameroun
-          </Paragraph>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>État du réseau</Title>
-          <Paragraph>
-            Type: {networkInfo?.type || 'Inconnu'}
-          </Paragraph>
-          <Paragraph>
-            Force du signal: {networkInfo?.strength || 'N/A'}
-          </Paragraph>
-          <Paragraph>
-            Opérateur: {networkInfo?.details?.carrier || 'Inconnu'}
-          </Paragraph>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Sélection</Title>
-          <Button
-            mode="outlined"
-            onPress={() => setShowOperatorModal(true)}
-            style={styles.selectionButton}
-          >
-            {selectedOperator || 'Sélectionner un opérateur'}
-          </Button>
-          <Button
-            mode="outlined"
-            onPress={() => setShowProblemTypeModal(true)}
-            style={styles.selectionButton}
-          >
-            {selectedProblemType || 'Sélectionner un type de problème'}
-          </Button>
-        </Card.Content>
-      </Card>
-
-      <Button
-        mode="contained"
-        onPress={handleReport}
-        loading={loading}
-        disabled={loading || !selectedOperator || !selectedProblemType}
-        style={styles.button}
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        Faire un signalement
-      </Button>
+        {error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : (
+          <>
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>NetAlerte CM</Title>
+                <Paragraph>
+                  Signalez rapidement les problèmes de réseau mobile au Cameroun
+                </Paragraph>
+              </Card.Content>
+            </Card>
 
-      {offlineReports.length > 0 && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title>Signalements en attente</Title>
-            <Paragraph>
-              {offlineReports.length} signalement(s) en attente d'envoi
-            </Paragraph>
-          </Card.Content>
-        </Card>
-      )}
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>État du réseau</Title>
+                <Paragraph>
+                  Type: {networkInfo?.type || 'Inconnu'}
+                </Paragraph>
+                <Paragraph>
+                  Force du signal: {networkInfo?.strength || 'N/A'}
+                </Paragraph>
+                <Paragraph>
+                  Opérateur: {networkInfo?.details?.carrier || 'Inconnu'}
+                </Paragraph>
+              </Card.Content>
+            </Card>
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>Sélection</Title>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowOperatorModal(true)}
+                  style={styles.selectionButton}
+                >
+                  {selectedOperator || 'Sélectionner un opérateur'}
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowProblemTypeModal(true)}
+                  style={styles.selectionButton}
+                >
+                  {selectedProblemType || 'Sélectionner un type de problème'}
+                </Button>
+              </Card.Content>
+            </Card>
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>Statistiques</Title>
+                {stats && (
+                  <>
+                    <Paragraph>Total des signalements: {stats.total}</Paragraph>
+                    <Paragraph>
+                      En attente: {stats.byStatus?.pending || 0}
+                    </Paragraph>
+                    <Paragraph>
+                      Résolus: {stats.byStatus?.resolved || 0}
+                    </Paragraph>
+                  </>
+                )}
+              </Card.Content>
+            </Card>
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>Signalements récents</Title>
+                {recentReports.map((report) => (
+                  <Card key={report.id} style={styles.reportCard}>
+                    <Card.Content>
+                      <Title>{report.operator}</Title>
+                      <Paragraph>Type: {report.problem_type}</Paragraph>
+                      <Paragraph>Statut: {report.status}</Paragraph>
+                      <Paragraph>
+                        Date: {new Date(report.created_at).toLocaleDateString()}
+                      </Paragraph>
+                    </Card.Content>
+                  </Card>
+                ))}
+              </Card.Content>
+            </Card>
+
+            <Button
+              mode="contained"
+              onPress={handleReport}
+              loading={loading}
+              disabled={loading || !selectedOperator || !selectedProblemType}
+              style={styles.button}
+            >
+              Faire un signalement
+            </Button>
+
+            {offlineReports.length > 0 && (
+              <Card style={styles.card}>
+                <Card.Content>
+                  <Title>Signalements en attente</Title>
+                  <Paragraph>
+                    {offlineReports.length} signalement(s) en attente d'envoi
+                  </Paragraph>
+                </Card.Content>
+              </Card>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <FAB
+        style={styles.fab}
+        icon="plus"
+        onPress={() => navigation.navigate('Report')}
+        label="Nouveau signalement"
+      />
 
       {renderOperatorModal()}
       {renderProblemTypeModal()}
@@ -318,6 +401,22 @@ const styles = StyleSheet.create({
     padding: 20,
     margin: 20,
     maxHeight: '80%',
+  },
+  reportCard: {
+    marginVertical: 5,
+    backgroundColor: '#fff',
+  },
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#2196F3',
+  },
+  error: {
+    color: '#B00020',
+    textAlign: 'center',
+    margin: 20,
   },
 });
 
